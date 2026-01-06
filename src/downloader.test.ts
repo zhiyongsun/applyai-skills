@@ -1,209 +1,152 @@
-import axios from 'axios';
-import * as fs from 'fs-extra';
-import { downloadFromGitHub } from './downloader';
+import { installSkill, InstallOptions } from './downloader';
+import * as fs from 'fs';
+import { execSync } from 'child_process';
+import * as utils from './utils';
 
 // Mock dependencies
-jest.mock('axios');
-jest.mock('fs-extra');
+jest.mock('fs');
+jest.mock('child_process');
+jest.mock('os', () => ({
+  homedir: jest.fn(() => '/home/user'),
+}));
+jest.mock('ora', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({
+    start: jest.fn(() => ({
+      succeed: jest.fn(),
+      fail: jest.fn(),
+    })),
+  })),
+}));
+jest.mock('@inquirer/prompts', () => ({
+  checkbox: jest.fn(),
+  confirm: jest.fn(),
+}));
 jest.mock('chalk', () => ({
-  blue: (str: string) => str,
-  gray: (str: string) => str,
-  green: (str: string) => str,
+  __esModule: true,
+  default: {
+    red: (str: string) => str,
+    yellow: (str: string) => str,
+    green: (str: string) => str,
+    blue: (str: string) => str,
+    cyan: (str: string) => str,
+    dim: (str: string) => str,
+    bold: (str: string) => str,
+  },
+}));
+jest.mock('./utils', () => ({
+  isLocalPath: jest.fn(),
+  isGitUrl: jest.fn(),
+  expandPath: jest.fn((path: string) => path),
+  parseGitHubShorthand: jest.fn(),
 }));
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedFs = fs as jest.Mocked<typeof fs>;
+const mockedExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockedUtils = utils as jest.Mocked<typeof utils>;
 
-// Mock console.log to avoid test output interference
-global.console = {
-  ...console,
-  log: jest.fn(),
-};
-
-describe('downloadFromGitHub', () => {
+describe('installSkill', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (mockedFs.pathExists as unknown as jest.Mock).mockResolvedValue(false);
-    (mockedFs.ensureDir as unknown as jest.Mock).mockResolvedValue(undefined);
-    (mockedFs.writeFile as unknown as jest.Mock).mockResolvedValue(undefined);
+    process.cwd = jest.fn(() => '/current/dir');
+    (mockedFs.existsSync as jest.Mock).mockReturnValue(false);
+    (mockedFs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+    (mockedFs.cpSync as jest.Mock).mockReturnValue(undefined);
+    (mockedFs.rmSync as jest.Mock).mockReturnValue(undefined);
+    
+    // Setup default utils mocks
+    (mockedUtils.isLocalPath as jest.Mock).mockReturnValue(false);
+    (mockedUtils.isGitUrl as jest.Mock).mockReturnValue(false);
+    (mockedUtils.expandPath as jest.Mock).mockImplementation((path: string) => path);
+    (mockedUtils.parseGitHubShorthand as jest.Mock).mockReturnValue({
+      repoUrl: 'https://github.com/owner/repo',
+      skillSubpath: '',
+    });
   });
 
-  it('应该成功下载单个文件', async () => {
-    const mockContents = [
-      {
-        name: 'file.txt',
-        path: 'jira-workflow/file.txt',
-        type: 'file' as const,
-        download_url: 'https://raw.githubusercontent.com/owner/repo/main/jira-workflow/file.txt',
-      },
-    ];
-
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockContents }) // getDirectoryContents
-      .mockResolvedValueOnce({ data: Buffer.from('file content') }); // downloadFile
-
-    await downloadFromGitHub(
-      'owner',
-      'repo',
-      'main',
-      'jira-workflow',
-      '/tmp',
-      'jira-workflow'
-    );
-
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
-    expect(mockedFs.ensureDir).toHaveBeenCalled();
-    expect(mockedFs.writeFile).toHaveBeenCalled();
-  });
-
-  it('应该递归下载子目录', async () => {
-    const mockRootContents = [
-      {
-        name: 'subdir',
-        path: 'jira-workflow/subdir',
-        type: 'dir' as const,
-        download_url: null,
-      },
-    ];
-
-    const mockSubdirContents = [
-      {
-        name: 'file.txt',
-        path: 'jira-workflow/subdir/file.txt',
-        type: 'file' as const,
-        download_url: 'https://raw.githubusercontent.com/owner/repo/main/jira-workflow/subdir/file.txt',
-      },
-    ];
-
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockRootContents }) // root directory
-      .mockResolvedValueOnce({ data: mockSubdirContents }) // subdir
-      .mockResolvedValueOnce({ data: Buffer.from('content') }); // file
-
-    await downloadFromGitHub(
-      'owner',
-      'repo',
-      'main',
-      'jira-workflow',
-      '/tmp',
-      'jira-workflow'
-    );
-
-    expect(mockedAxios.get).toHaveBeenCalledTimes(3);
-    expect(mockedFs.ensureDir).toHaveBeenCalledTimes(2); // root + subdir
-  });
-
-  it('应该在目录已存在时抛出错误', async () => {
-    (mockedFs.pathExists as unknown as jest.Mock).mockResolvedValue(true);
-
-    await expect(
-      downloadFromGitHub(
-        'owner',
-        'repo',
-        'main',
-        'jira-workflow',
-        '/tmp',
-        'jira-workflow'
-      )
-    ).rejects.toThrow('Directory already exists');
-  });
-
-  it('应该处理 GitHub API 404 错误', async () => {
-    const error = {
-      response: {
-        status: 404,
-        statusText: 'Not Found',
-      },
+  it('should install skill from local path', async () => {
+    const localPath = '/path/to/skill';
+    const options: InstallOptions = {
+      targetDir: '/target/dir',
     };
 
-    mockedAxios.get.mockRejectedValueOnce(error);
+    (mockedUtils.isLocalPath as jest.Mock).mockReturnValue(true);
+    (mockedFs.existsSync as jest.Mock).mockImplementation((path: string) => {
+      return path === localPath || path === `${localPath}/SKILL.md`;
+    });
+    (mockedFs.statSync as jest.Mock).mockReturnValue({
+      isDirectory: () => true,
+    });
+    (mockedFs.readdirSync as jest.Mock).mockReturnValue([]);
+    (mockedFs.readFileSync as jest.Mock).mockReturnValue('---\ndescription: Test skill\n---');
 
-    await expect(
-      downloadFromGitHub(
-        'owner',
-        'repo',
-        'main',
-        'nonexistent',
-        '/tmp',
-        'nonexistent'
-      )
-    ).rejects.toThrow('Directory not found');
+    await installSkill(localPath, options);
+
+    expect(mockedUtils.isLocalPath).toHaveBeenCalledWith(localPath);
+    expect(mockedFs.existsSync).toHaveBeenCalled();
+    expect(mockedFs.mkdirSync).toHaveBeenCalled();
   });
 
-  it('应该处理 GitHub API 403 错误（限流）', async () => {
-    const error = {
-      response: {
-        status: 403,
-        statusText: 'Forbidden',
-      },
+  it('should handle local path that does not exist', async () => {
+    const localPath = '/nonexistent/path';
+    const options: InstallOptions = {
+      targetDir: '/target/dir',
     };
 
-    mockedAxios.get.mockRejectedValueOnce(error);
+    (mockedFs.existsSync as jest.Mock).mockReturnValue(false);
 
-    await expect(
-      downloadFromGitHub(
-        'owner',
-        'repo',
-        'main',
-        'jira-workflow',
-        '/tmp',
-        'jira-workflow'
-      )
-    ).rejects.toThrow('GitHub API rate limit exceeded');
+    await expect(installSkill(localPath, options)).rejects.toThrow();
   });
 
-  it('应该处理文件下载失败', async () => {
-    const mockContents = [
+  it('should install skill from GitHub shorthand', async () => {
+    const source = 'owner/repo';
+    const options: InstallOptions = {};
+
+    (mockedUtils.isLocalPath as jest.Mock).mockReturnValue(false);
+    (mockedUtils.isGitUrl as jest.Mock).mockReturnValue(false);
+    (mockedUtils.parseGitHubShorthand as jest.Mock).mockReturnValue({
+      repoUrl: 'https://github.com/owner/repo',
+      skillSubpath: '',
+    });
+    (mockedFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockedFs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+    (mockedExecSync as jest.Mock).mockReturnValue(Buffer.from(''));
+    (mockedFs.readdirSync as jest.Mock).mockReturnValue([
       {
-        name: 'file.txt',
-        path: 'jira-workflow/file.txt',
-        type: 'file' as const,
-        download_url: 'https://raw.githubusercontent.com/owner/repo/main/jira-workflow/file.txt',
+        name: 'skill1',
+        isDirectory: () => true,
       },
-    ];
+    ] as any);
+    (mockedFs.readFileSync as jest.Mock).mockReturnValue('---\ndescription: Test\n---');
 
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockContents })
-      .mockRejectedValueOnce({
-        response: {
-          status: 500,
-          statusText: 'Internal Server Error',
-        },
-      });
+    await installSkill(source, options);
 
-    await expect(
-      downloadFromGitHub(
-        'owner',
-        'repo',
-        'main',
-        'jira-workflow',
-        '/tmp',
-        'jira-workflow'
-      )
-    ).rejects.toThrow();
+    expect(mockedUtils.parseGitHubShorthand).toHaveBeenCalledWith(source);
+    expect(mockedExecSync).toHaveBeenCalled();
+    expect(mockedExecSync).toHaveBeenCalledWith(
+      expect.stringContaining('git clone'),
+      expect.any(Object)
+    );
   });
 
-  it('应该处理没有 download_url 的文件', async () => {
-    const mockContents = [
-      {
-        name: 'file.txt',
-        path: 'jira-workflow/file.txt',
-        type: 'file' as const,
-        download_url: null,
-      },
-    ];
+  it('should handle git clone failure', async () => {
+    const source = 'owner/repo';
+    const options: InstallOptions = {};
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockContents });
+    (mockedUtils.isLocalPath as jest.Mock).mockReturnValue(false);
+    (mockedUtils.isGitUrl as jest.Mock).mockReturnValue(false);
+    (mockedUtils.parseGitHubShorthand as jest.Mock).mockReturnValue({
+      repoUrl: 'https://github.com/owner/repo',
+      skillSubpath: '',
+    });
+    (mockedFs.existsSync as jest.Mock).mockReturnValue(true);
+    (mockedFs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+    (mockedExecSync as jest.Mock).mockImplementation(() => {
+      const error = new Error('Clone failed');
+      (error as any).stderr = Buffer.from('error');
+      throw error;
+    });
 
-    await expect(
-      downloadFromGitHub(
-        'owner',
-        'repo',
-        'main',
-        'jira-workflow',
-        '/tmp',
-        'jira-workflow'
-      )
-    ).rejects.toThrow('No download URL');
+    await expect(installSkill(source, options)).rejects.toThrow();
   });
 });

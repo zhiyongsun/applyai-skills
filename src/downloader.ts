@@ -5,7 +5,6 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, confirm } from '@inquirer/prompts';
-import { ExitPromptError } from '@inquirer/core';
 import { isLocalPath, isGitUrl, expandPath, parseGitHubShorthand } from './utils';
 
 /**
@@ -257,7 +256,9 @@ async function installFromRepo(
 
       skillsToInstall = skillInfos.filter((info) => selected.includes(info.skillName));
     } catch (error) {
-      if (error instanceof ExitPromptError) {
+      // Handle user cancellation (Ctrl+C or ESC)
+      const err = error as Error;
+      if (err.name === 'ExitPromptError' || err.message?.includes('cancel')) {
         console.log(chalk.yellow('\n\nCancelled by user'));
         process.exit(0);
       }
@@ -323,7 +324,9 @@ async function warnIfConflict(
         return false; // Skip this skill, continue with others
       }
     } catch (error) {
-      if (error instanceof ExitPromptError) {
+      // Handle user cancellation (Ctrl+C or ESC)
+      const err = error as Error;
+      if (err.name === 'ExitPromptError' || err.message?.includes('cancel')) {
         console.log(chalk.yellow('\n\nCancelled by user'));
         process.exit(0);
       }
