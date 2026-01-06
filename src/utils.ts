@@ -1,5 +1,8 @@
+import { join, resolve } from 'path';
+import { homedir } from 'os';
+
 /**
- * GitHub URL 解析结果
+ * GitHub URL parsing result
  */
 export interface GitHubUrlInfo {
   owner: string;
@@ -10,12 +13,47 @@ export interface GitHubUrlInfo {
 }
 
 /**
- * 解析 GitHub URL，提取仓库信息和路径
+ * Check if source is a local path
+ */
+export function isLocalPath(source: string): boolean {
+  return (
+    source.startsWith('/') ||
+    source.startsWith('./') ||
+    source.startsWith('../') ||
+    source.startsWith('~/')
+  );
+}
+
+/**
+ * Check if source is a Git URL (SSH, git://, or HTTPS)
+ */
+export function isGitUrl(source: string): boolean {
+  return (
+    source.startsWith('git@') ||
+    source.startsWith('git://') ||
+    source.startsWith('http://') ||
+    source.startsWith('https://') ||
+    source.endsWith('.git')
+  );
+}
+
+/**
+ * Expand ~ to home directory
+ */
+export function expandPath(source: string): string {
+  if (source.startsWith('~/')) {
+    return join(homedir(), source.slice(2));
+  }
+  return resolve(source);
+}
+
+/**
+ * Parse GitHub URL and extract repository information and path
  * @param url - GitHub URL
- * @returns 包含 owner, repo, branch, path, directoryName 的对象
+ * @returns Object containing owner, repo, branch, path, directoryName
  */
 export function parseGitHubUrl(url: string): GitHubUrlInfo {
-  // 支持的 URL 格式：
+  // Supported URL formats:
   // https://github.com/owner/repo/tree/branch/path/to/directory
   // https://github.com/owner/repo/blob/branch/path/to/file
   
@@ -28,7 +66,7 @@ export function parseGitHubUrl(url: string): GitHubUrlInfo {
   
   const [, owner, repo, branch, path] = match;
   
-  // 提取最后一个目录名
+  // Extract the last directory name
   const pathParts = path.split('/').filter(Boolean);
   const directoryName = pathParts[pathParts.length - 1];
   
@@ -43,4 +81,24 @@ export function parseGitHubUrl(url: string): GitHubUrlInfo {
     path: pathParts.join('/'),
     directoryName
   };
+}
+
+/**
+ * Parse GitHub shorthand format (owner/repo or owner/repo/skill-path)
+ */
+export function parseGitHubShorthand(source: string): { repoUrl: string; skillSubpath: string } {
+  const parts = source.split('/');
+  if (parts.length === 2) {
+    return {
+      repoUrl: `https://github.com/${source}`,
+      skillSubpath: ''
+    };
+  } else if (parts.length > 2) {
+    return {
+      repoUrl: `https://github.com/${parts[0]}/${parts[1]}`,
+      skillSubpath: parts.slice(2).join('/')
+    };
+  } else {
+    throw new Error('Invalid source format. Expected: owner/repo or owner/repo/skill-name');
+  }
 }

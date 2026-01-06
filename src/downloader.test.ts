@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as fs from 'fs-extra';
 import { downloadFromGitHub } from './downloader';
 
-// Mock 依赖
+// Mock dependencies
 jest.mock('axios');
 jest.mock('fs-extra');
 jest.mock('chalk', () => ({
@@ -14,7 +14,7 @@ jest.mock('chalk', () => ({
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedFs = fs as jest.Mocked<typeof fs>;
 
-// Mock console.log 以避免测试输出干扰
+// Mock console.log to avoid test output interference
 global.console = {
   ...console,
   log: jest.fn(),

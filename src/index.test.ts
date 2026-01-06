@@ -2,7 +2,7 @@ import { install } from './index';
 import { parseGitHubUrl } from './utils';
 import { downloadFromGitHub } from './downloader';
 
-// Mock 依赖
+// Mock dependencies
 jest.mock('./utils');
 jest.mock('./downloader');
 jest.mock('chalk', () => ({

@@ -84,12 +84,12 @@ describe('parseGitHubUrl', () => {
   });
 
   it('应该抛出错误当无法提取目录名', () => {
-    // 这种情况理论上不应该发生，因为正则已经匹配了路径
-    // 但为了完整性，我们测试空路径的情况
+    // This case should theoretically not happen because the regex already matches the path
+    // But for completeness, we test the case of empty path
     const url = 'https://github.com/owner/repo/tree/main/';
     
-    // 由于我们的实现会过滤空字符串，这应该返回最后一个非空部分
-    // 如果路径为空，正则本身就不会匹配
+    // Since our implementation filters empty strings, this should return the last non-empty part
+    // If the path is empty, the regex itself won't match
     expect(() => parseGitHubUrl(url)).toThrow();
   });
 });
