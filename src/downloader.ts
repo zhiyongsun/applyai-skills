@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 import { checkbox, confirm } from '@inquirer/prompts';
-import { isLocalPath, isGitUrl, expandPath, parseGitHubShorthand } from './utils';
+import { isLocalPath, isGitUrl, expandPath, parseGitHubShorthand, isGitHubTreeUrl, convertGitHubUrlToCloneUrl } from './utils';
 
 /**
  * Installation options
@@ -369,12 +369,19 @@ function formatSize(bytes: number): string {
  * Clone repository from Git URL
  * @param repoUrl - Git repository URL
  * @param tempDir - Temporary directory to clone into
+ * @param branch - Optional branch name to clone
  * @returns Path to the cloned repository directory
  */
-function cloneRepository(repoUrl: string, tempDir: string): string {
+function cloneRepository(repoUrl: string, tempDir: string, branch?: string): string {
   const spinner = ora('Cloning repository...').start();
   try {
-    execSync(`git clone --depth 1 --quiet "${repoUrl}" "${tempDir}/repo"`, {
+    let cloneCommand = `git clone --depth 1 --quiet`;
+    if (branch) {
+      cloneCommand += ` --branch "${branch}"`;
+    }
+    cloneCommand += ` "${repoUrl}" "${tempDir}/repo"`;
+    
+    execSync(cloneCommand, {
       stdio: 'pipe',
     });
     spinner.succeed('Repository cloned');
@@ -414,8 +421,15 @@ export async function installSkill(source: string, options: InstallOptions): Pro
   // Parse Git source
   let repoUrl: string;
   let skillSubpath: string = '';
+  let branch: string | undefined;
 
-  if (isGitUrl(source)) {
+  // Check if it's a GitHub tree/blob URL first
+  if (isGitHubTreeUrl(source)) {
+    const converted = convertGitHubUrlToCloneUrl(source);
+    repoUrl = converted.repoUrl;
+    skillSubpath = converted.skillSubpath;
+    branch = converted.branch;
+  } else if (isGitUrl(source)) {
     // Full Git URL (SSH, HTTPS, git://)
     repoUrl = source;
   } else {
@@ -430,7 +444,7 @@ export async function installSkill(source: string, options: InstallOptions): Pro
   mkdirSync(tempDir, { recursive: true });
 
   try {
-    const repoDir = cloneRepository(repoUrl, tempDir);
+    const repoDir = cloneRepository(repoUrl, tempDir, branch);
 
     // Then install specific skill or from repo
     if (skillSubpath) {

@@ -1,6 +1,6 @@
 {
   "name": "applyai-skills",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CLI tool to install skills from GitHub repositories",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

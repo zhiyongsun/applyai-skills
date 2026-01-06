@@ -84,6 +84,31 @@ export function parseGitHubUrl(url: string): GitHubUrlInfo {
 }
 
 /**
+ * Check if URL is a GitHub tree/blob URL
+ * @param url - URL to check
+ * @returns true if URL is a GitHub tree/blob URL
+ */
+export function isGitHubTreeUrl(url: string): boolean {
+  return /^https?:\/\/github\.com\/[^\/]+\/[^\/]+\/(?:tree|blob)\//.test(url);
+}
+
+/**
+ * Convert GitHub tree/blob URL to git clone URL and extract path information
+ * @param url - GitHub tree/blob URL
+ * @returns Object containing repoUrl, skillSubpath, and branch
+ */
+export function convertGitHubUrlToCloneUrl(url: string): { repoUrl: string; skillSubpath: string; branch?: string } {
+  const urlInfo = parseGitHubUrl(url);
+  const repoUrl = `https://github.com/${urlInfo.owner}/${urlInfo.repo}.git`;
+  
+  return {
+    repoUrl,
+    skillSubpath: urlInfo.path,
+    branch: urlInfo.branch
+  };
+}
+
+/**
  * Parse GitHub shorthand format (owner/repo or owner/repo/skill-path)
  */
 export function parseGitHubShorthand(source: string): { repoUrl: string; skillSubpath: string } {
