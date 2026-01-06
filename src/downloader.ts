@@ -366,6 +366,31 @@ function formatSize(bytes: number): string {
 }
 
 /**
+ * Clone repository from Git URL
+ * @param repoUrl - Git repository URL
+ * @param tempDir - Temporary directory to clone into
+ * @returns Path to the cloned repository directory
+ */
+function cloneRepository(repoUrl: string, tempDir: string): string {
+  const spinner = ora('Cloning repository...').start();
+  try {
+    execSync(`git clone --depth 1 --quiet "${repoUrl}" "${tempDir}/repo"`, {
+      stdio: 'pipe',
+    });
+    spinner.succeed('Repository cloned');
+    return join(tempDir, 'repo');
+  } catch (error) {
+    spinner.fail('Failed to clone repository');
+    const err = error as { stderr?: Buffer };
+    if (err.stderr) {
+      console.error(chalk.dim(err.stderr.toString().trim()));
+    }
+    console.error(chalk.yellow('\nTip: For private repos, ensure git SSH keys or credentials are configured'));
+    process.exit(1);
+  }
+}
+
+/**
  * Main function to install skill
  */
 export async function installSkill(source: string, options: InstallOptions): Promise<void> {
@@ -400,29 +425,14 @@ export async function installSkill(source: string, options: InstallOptions): Pro
     skillSubpath = parsed.skillSubpath;
   }
 
-  // Clone and install
+  // Clone repository first
   const tempDir = join(homedir(), `.applyai-skills-temp-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
   try {
-    const spinner = ora('Cloning repository...').start();
-    try {
-      execSync(`git clone --depth 1 --quiet "${repoUrl}" "${tempDir}/repo"`, {
-        stdio: 'pipe',
-      });
-      spinner.succeed('Repository cloned');
-    } catch (error) {
-      spinner.fail('Failed to clone repository');
-      const err = error as { stderr?: Buffer };
-      if (err.stderr) {
-        console.error(chalk.dim(err.stderr.toString().trim()));
-      }
-      console.error(chalk.yellow('\nTip: For private repos, ensure git SSH keys or credentials are configured'));
-      process.exit(1);
-    }
+    const repoDir = cloneRepository(repoUrl, tempDir);
 
-    const repoDir = join(tempDir, 'repo');
-
+    // Then install specific skill or from repo
     if (skillSubpath) {
       const isProject = targetDir.includes(process.cwd());
       await installSpecificSkill(repoDir, skillSubpath, targetDir, isProject, options);
