@@ -1,0 +1,47 @@
+{
+  "name": "applyai-skills",
+  "version": "1.0.0",
+  "description": "CLI tool to install skills from GitHub repositories",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "applyai-skills": "./dist/bin/applyai-skills.js"
+  },
+  "scripts": {
+    "build": "npm run build:src && npm run build:bin && npm run fix:bin",
+    "build:src": "tsc",
+    "build:bin": "tsc -p tsconfig.bin.json",
+    "fix:bin": "node scripts/fix-bin-imports.js",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "cli",
+    "github",
+    "skills",
+    "installer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "axios": "^1.6.0",
+    "fs-extra": "^11.2.0",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^29.5.11",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
